@@ -6,6 +6,7 @@ class sdlDraw {
     SDL_Window *window;
     SDL_Renderer *renderer;
     SDL_Surface *pixelSurface;
+    SDL_Texture* texture;
     Chip8 *processor;
 
 public:

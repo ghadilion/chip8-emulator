@@ -1,3 +1,7 @@
+// TODO
+// 1. configurable clock speed
+// 2. put PIXEL_SIZE and other 2 into class
+
 #include <SDL2/SDL.h>
 #include <iostream>
 #include <chrono>
@@ -5,9 +9,9 @@
 #include "sdlDraw.hpp"
 #include "chip8.hpp"
 
-const int SCREEN_WIDTH = 8 * 64;
-const int SCREEN_HEIGHT = 8 * 32;
-const int PIXEL_SIZE = 8;
+int PIXEL_SIZE = 8;
+int SCREEN_WIDTH = PIXEL_SIZE * 64;
+int SCREEN_HEIGHT = PIXEL_SIZE * 32;
 
 sdlDraw::sdlDraw(bool setAndShift, bool jumpOffsetVariable, bool loadStoreIdxInc, char *game) {
      // Initialize SDL
@@ -21,9 +25,7 @@ sdlDraw::sdlDraw(bool setAndShift, bool jumpOffsetVariable, bool loadStoreIdxInc
     // Create a renderer for the window
     renderer = SDL_CreateRenderer(window, -1, 0);
 
-    // Create a black pixel surface with the same dimensions as the pixel array
-    pixelSurface = SDL_CreateRGBSurface(0, SCREEN_WIDTH,
-            SCREEN_HEIGHT , 32, 0, 0, 0, 0);
+    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
 
     // initialize chip8 cpu
     
@@ -31,26 +33,33 @@ sdlDraw::sdlDraw(bool setAndShift, bool jumpOffsetVariable, bool loadStoreIdxInc
 }
 
 void sdlDraw::update(bool pixels[32][64]) {
-    // Draw white pixels for every 1 and black pixels for every 0
-    for (int i = 0; i < SCREEN_HEIGHT/ PIXEL_SIZE; i++) {
-        for (int j = 0; j < SCREEN_WIDTH / PIXEL_SIZE; j++) {
-            SDL_Rect pixelRect = { j * PIXEL_SIZE, i * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE };
-            if (pixels[i][j] == 1) 
-                SDL_FillRect(pixelSurface, &pixelRect, SDL_MapRGB(pixelSurface->format, 255, 255, 255));
-            else 
-                SDL_FillRect(pixelSurface, &pixelRect, SDL_MapRGB(pixelSurface->format, 0, 0, 0));
-            
+
+    Uint32* screenPixels = NULL;
+    int pitch = 0;
+    SDL_LockTexture(texture, NULL, (void**)&screenPixels, &pitch);
+    
+    for (int y = 0; y < SCREEN_HEIGHT; y++) {
+        for (int x = 0; x < SCREEN_WIDTH; x++) {
+            int index = y * (pitch / sizeof(Uint32)) + x;
+            if(pixels[y/PIXEL_SIZE][x/PIXEL_SIZE] == 1)
+                screenPixels[index] = 0xFFFFFFFF; // set pixel to white
+            else
+                screenPixels[index] = 0xFF000000; // set pixel to black
         }
     }
+    SDL_UnlockTexture(texture);
 }
 
 void sdlDraw::display() {
 
     SDL_Event e;
-    SDL_Texture* texture;
     std::chrono::time_point<std::chrono::high_resolution_clock> startTime, endTime, timer;
     startTime = std::chrono::high_resolution_clock::now();
     timer = startTime;
+
+    // determine state of input keys (whether pressed or not)
+    const uint8_t* state = SDL_GetKeyboardState(nullptr);
+
     while(true) {
 
         if( SDL_PollEvent( &e ) != 0 && e.type == SDL_QUIT) 
@@ -60,7 +69,6 @@ void sdlDraw::display() {
         std::chrono::duration<int, std::micro> duration = 
         std::chrono::duration_cast<std::chrono::microseconds>(endTime-startTime),
         timerDuration = std::chrono::duration_cast<std::chrono::microseconds>(endTime-timer);
-        
         if(timerDuration.count() >= (int)(1e6/60)) {
             if(processor->delayTimer > 0)
                 processor->delayTimer--;
@@ -88,9 +96,6 @@ void sdlDraw::display() {
  *
 ******************************************************************************/
 
-        // determine state of input keys (whether pressed or not)
-        const uint8_t* state = SDL_GetKeyboardState(nullptr);
-        
         bool tempArray[16] = {
             state[SDL_SCANCODE_X], state[SDL_SCANCODE_1], state[SDL_SCANCODE_2],
             state[SDL_SCANCODE_3], state[SDL_SCANCODE_Q], state[SDL_SCANCODE_W], 
@@ -107,8 +112,6 @@ void sdlDraw::display() {
         
         if(refreshDisplay) {
             update(processor->display);
-
-            texture = SDL_CreateTextureFromSurface(renderer, pixelSurface);
 
             // Blit the pixel surface onto the window
             SDL_RenderCopy(renderer, texture, NULL, NULL);
@@ -137,11 +140,12 @@ void help() {
     std::cout << "Chip 8 Emulator\n";
     std::cout << "Example: ./chip8emu -sjl game_rom.ch8\n\n";
     std::cout << "Options:\n\n";
-    std::cout << "\t-h\t--help\t\tDisplays this help text\n\n";
+    std::cout << "\t-h\t--help\t\tDisplays this help text\n";
+    std::cout << "\t-p=n\t--pixel-size=n\t\tSets pixel size to n\n\n";
     std::cout << "Following options enable configuration of ambiguous instructions\n\n";
     std::cout << "\t-s\t--set-and-shift\t\tSet value of VX to VY before shift operations 8XY6 and 8XYE\n\n";
     std::cout << "\t-j\t--jump-offset-variable\t\tJump with offset instruction BNNN jumps to the address XNN, plus the value in the register VX\n";
-    std::cout << "\t-l\t--load-store-idx-inc\t\tSet index register (I) value to I + X + 1 after executing load (FX65) or store (FX55) instructions\n";
+    std::cout << "\t-l\t--load-store-idx-inc\t\tSet index register (I) value to I + X + 1 after executing load (FX65) or store (FX55) instructions\n\n";
 }
 
 
@@ -154,7 +158,19 @@ int main(int argc, char *argv[]) {
 
     // process commandline args
     for(int i = 1; i < argc-1; ++i) {
-        if(strcmp(argv[i], "--set-and-shift") == 0)
+        if(strncmp(argv[i], "--pixel-size=", 13) == 0) {
+            PIXEL_SIZE = atoi(argv[i]+13);
+            SCREEN_WIDTH = PIXEL_SIZE * 64;
+            SCREEN_HEIGHT = PIXEL_SIZE * 32;
+        }
+
+        else if(strncmp(argv[i], "-p=", 3) == 0) {
+            PIXEL_SIZE = atoi(argv[i]+3);
+            SCREEN_WIDTH = PIXEL_SIZE * 64;
+            SCREEN_HEIGHT = PIXEL_SIZE * 32;
+        }
+
+        else if(strcmp(argv[i], "--set-and-shift") == 0)
             setAndShift = 1;
 
         else if(strcmp(argv[i], "--jump-offset-variable") == 0)
