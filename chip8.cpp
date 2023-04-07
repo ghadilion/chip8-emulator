@@ -443,18 +443,27 @@ void Chip8::addToIndex(uint8_t regLoc) {
 }
 
 void Chip8::getKey(uint8_t regLoc) {
-    bool noKeysPressed = true;
-    uint8_t key;
-    for(key = 0x0; key <= 0xF; ++key) {
-        if(keys[key]) {
-            noKeysPressed = false;
-            break;
+    static uint8_t state = 0, key;
+    std::cout << state << " " << key << std::endl;
+    if(state == 0) {
+        bool keyPressed = false;
+        for(key = 0x0; key <= 0xF; ++key) {
+            if(keys[key]) {
+                keyPressed = true;
+                break;
+            }
         }
-    }
-    if(noKeysPressed)
+        if(keyPressed)
+            state = 1;
         PC -= 2;
+    }
+    else if(state == 1 && !keys[key]) {
+        state = 0;
+        V[regLoc] = key;       
+    }
     else
-        V[regLoc] = key;
+        PC -= 2;
+        
 }
 
 void Chip8::fontCharacter(uint8_t regLoc) {
