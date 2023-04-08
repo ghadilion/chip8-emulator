@@ -9,6 +9,7 @@
 ```console
 ./chip8emu --help
 ```
+![](./screenshots/0)
 
 ## Screenshots
 

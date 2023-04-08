@@ -1,5 +1,6 @@
 #include <SDL2/SDL.h>
 #include <iostream>
+#include <string>
 #include <chrono>
 #include <cstring>
 #include "sdlDraw.hpp"
@@ -10,9 +11,13 @@ sdlDraw::sdlDraw(char *game,
         bool jumpOffsetVariable = false, 
         bool loadStoreIdxInc = false, 
         int clockSpeed = 700, 
-        int pixelSize = 8
+        int pixelSize = 8,
+        int fgColor = 0xFFFFFFFF,
+        int bgColor = 0xFF000000 
     ) {
 
+    this->fgColor = fgColor;
+    this->bgColor = bgColor;
     this->pixelSize = pixelSize;
     this->clockSpeed = clockSpeed;
     screenWidth = pixelSize * 64;
@@ -49,9 +54,9 @@ void sdlDraw::update(bool pixels[32][64]) {
         for (int x = 0; x < screenWidth; x++) {
             int index = y * (pitch / sizeof(Uint32)) + x;
             if(pixels[y/pixelSize][x/pixelSize] == 1)
-                screenPixels[index] = 0xFFFFFFFF; // set pixel to white
+                screenPixels[index] = fgColor; // set pixel to white
             else
-                screenPixels[index] = 0xFF000000; // set pixel to black
+                screenPixels[index] = bgColor; // set pixel to black
         }
     }
     SDL_UnlockTexture(texture);
@@ -154,7 +159,9 @@ void help() {
     std::cout << "Options:\n\n";
     std::cout << "\t-h\t--help\t\t\tDisplays this help text\n";
     std::cout << "\t-p=n\t--pixel-size=n\t\tSets pixel size to n\n";
-    std::cout << "\t-c=n\t--clock-speed=n\t\tSets clock speed to n\n\n";
+    std::cout << "\t-c=n\t--clock-speed=n\t\tSets clock speed to n\n";
+    std::cout << "\t-fg=n\t--foreground=n\t\tSets foreground to n (RRGGBB hex)\n";
+    std::cout << "\t-bg=n\t--background=n\t\tSets background to n (RRGGBB hex)\n\n";
     std::cout << "Following options enable configuration of ambiguous instructions\n\n";
     std::cout << "\t-s\t--set-and-shift\t\t\tSet value of VX to VY before shift operations 8XY6 and 8XYE\n";
     std::cout << "\t-j\t--jump-offset-variable\t\tJump with offset instruction";
@@ -166,7 +173,7 @@ void help() {
 
 int main(int argc, char *argv[]) {
     bool setAndShift = 0, jumpOffsetVariable = 0, loadStoreIdxInc = 0;
-    int pixelSize = 8, clockSpeed = 700;
+    int pixelSize = 8, clockSpeed = 700, fgColor = 0xFFFFFFFF, bgColor = 0xFF000000;
     if(argc < 2 || strcmp(argv[argc-1], "--help") == 0 
             || strcmp(argv[argc-1], "-h") == 0) {
         help();
@@ -175,7 +182,19 @@ int main(int argc, char *argv[]) {
 
     // process commandline args
     for(int i = 1; i < argc-1; ++i) {
-        if(strncmp(argv[i], "--pixel-size=", 13) == 0) 
+        if(strncmp(argv[i], "--foreground=", 13) == 0)
+            fgColor = std::stoi(std::string(argv[i]+13), 0, 16);
+        
+        else if(strncmp(argv[i], "--background=", 13) == 0)
+            bgColor = std::stoi(std::string(argv[i]+13), 0, 16);
+
+        else if(strncmp(argv[i], "-bg=", 4) == 0)
+            bgColor = std::stoi(std::string(argv[i]+4), 0, 16);
+
+        else if(strncmp(argv[i], "-fg=", 4) == 0)
+            fgColor = std::stoi(std::string(argv[i]+4), 0, 16);
+
+        else if(strncmp(argv[i], "--pixel-size=", 13) == 0) 
             pixelSize = atoi(argv[i]+13);
 
         else if(strncmp(argv[i], "-p=", 3) == 0) 
@@ -233,7 +252,7 @@ int main(int argc, char *argv[]) {
     }
 
     sdlDraw _sdlDraw(argv[argc-1], setAndShift, jumpOffsetVariable, 
-                        loadStoreIdxInc, clockSpeed, pixelSize);
+                        loadStoreIdxInc, clockSpeed, pixelSize, fgColor, bgColor);
     
     _sdlDraw.display();
     return 0;

@@ -13,9 +13,11 @@ class sdlDraw {
     int pixelSize;
     int screenWidth;
     int screenHeight;
+    int fgColor;
+    int bgColor;
 
 public:
-    sdlDraw(char*, bool, bool, bool, int, int);
+    sdlDraw(char*, bool, bool, bool, int, int, int, int);
     void update(bool[32][64]);
     void display();
 };
